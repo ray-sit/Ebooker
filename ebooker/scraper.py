@@ -1,70 +1,58 @@
-import datetime
-from random import randint
-from time import sleep
+import concurrent.futures
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-from ebooker.html import HTMLDoc
 
-LOAD_BUFFER = 5
-MIN_WAIT = 0.5
-MAX_WAIT = 2
-
-
-def eta(sites_remaining: int) -> str:
-
-    def addSecs(tm, secs):
-        fulldate = datetime.datetime(100, 1, 1, tm.hour, tm.minute, tm.second)
-        fulldate = fulldate + datetime.timedelta(seconds=secs)
-        return fulldate.time()
-
-    min_eta_secs = sites_remaining * (MIN_WAIT + LOAD_BUFFER)
-    max_eta_secs = sites_remaining * (MAX_WAIT + LOAD_BUFFER)
-    current_time = datetime.datetime.now().time()
-    predicted_min = addSecs(current_time, min_eta_secs)
-    predicted_max = addSecs(current_time, max_eta_secs)
-
-    return f"{predicted_min} - {predicted_max} ({min_eta_secs} - {max_eta_secs} seconds) [Current Time: {current_time}]"
+MAX_THREADS = 16
+# Initialise options to run in headless mode - this saves alot of CPU and GPU
+OPTIONS = webdriver.ChromeOptions()
+OPTIONS.add_argument("--window-size=1920,1080")
+OPTIONS.add_argument("--headless")
+OPTIONS.add_argument("--disable-gpu")
+OPTIONS.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36")
 
 
-def scrape(sites: list, chrome_driver: str, title: str = "Book", content_div_class: str) -> str:
-    """  Scrapes data
+def scrape(sites: list, chrome_driver: str, content_div_class: str, num_threads: int = MAX_THREADS) -> dict:
+    """ Scrapes data from given list of sites, using selenium chrome driver in headless mode.
+        Multithreading is used to speed up process.
+
     config keywords:
         sites (list) - list of sites to scrape
         chrome_driver (str) - list of sites to scrape
-        title (str) - title to save files as
         content_div_class (str) - the main div class to save data for
+        num_threads (int) - Number of processing threads to use
+    Returns:
+        data (dict) - map of scraped data sites
     """
+    num_threads = max(min(num_threads, MAX_THREADS), 1)
+    print(f"Scraping {len(sites)} Sites with {num_threads} Worker Threads")
 
-    doc = HTMLDoc(title=title)
-    sites_remaining = len(sites)
-    print(f"Starting Web Scrape - ETA: {eta(sites_remaining)} seconds ({sites_remaining} remaining)")
+    # initiate data buffer
+    data = {  
+        site: None for site in sites
+    }
 
-    for site in sites:
-        print(f"Scraping {site=} - ETA: {eta(sites_remaining)} ({sites_remaining} remaining)")
-        driver = webdriver.Chrome(chrome_driver)
-        driver.get(site)
-
-        # GET CONTENT
+    # Retrieve a single page and report the URL and contents
+    def scrape_page(url):
+        print(f"Scraping Page - {url}")
+        driver = webdriver.Chrome(
+            executable_path=chrome_driver,
+            options=OPTIONS
+        )
+        driver.get(url)
         content = driver.find_elements_by_xpath(f"//div[@class='{content_div_class}']")
         paragraphs = [
             content[p].text
             for p in range(len(content))
         ]
-
-        for para_num, paragraph in enumerate(paragraphs):
-            for line_num, line in enumerate(paragraph.split('\n')):
-                if para_num == 0 and line_num == 0:  # Use the first line of the site as the chapter heading
-                    doc.add_header(line)
-                else:
-                    doc.add_line(line)
-
         driver.close()
-        driver = None
-        sites_remaining -= 1
-        # Imitate real world, pause for random number of seconds, ranging from 3-10
-        sleep_time = randint(MIN_WAIT, MAX_WAIT)
-        print(f"Wating {sleep_time} seconds...")
-        sleep(sleep_time)
+        return paragraphs
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+        execution_map = {
+            executor.submit(scrape_page, site): site
+            for site in sites
+        }
+        for future in concurrent.futures.as_completed(execution_map):
+            data[execution_map[future]] = future.result()  # Saves data to buffer as each task completes
 
     print("Web Scrape Complete!")
-    return doc
+    return data
