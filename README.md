@@ -41,52 +41,47 @@ python -m ebooker [PATH TO CONFIG FILE]
 
 Or use directly in python script:
 ```python
-from ebooker.scraper import scrape
-from ebooker.converter import convert_to_epub
+from ebooker.main import main
 
-# Specify config
+def build_site_list(base_url, chapter_range):
+    return [
+        f"{base_url}{chapter}"
+        for chapter in chapter_range
+    ]
+
 config = {
-    'sites': ['Some list of websites to scrape'],
-    'chrome_driver': "Path to Chrome Driver",
-    'content_div_class': 'Div Class to Find',
-    'title': "Book Title"
+    'sites': build_site_list('https://some-website/book/chapter-', list(range(1, 32))),
+    'chrome_driver': "chromedriver.exe",
+    'content_div_class': 'reading-content',
+    'title': "Book",
+    'num_threads': 16,
+    'ignore_lines': ['Advertisement']
 }
-html_doc = scrape(**config)
-html_doc_file = html_doc.save_to_file()
-epub_file = convert_to_epub(html_doc_file)
+epub_file = main(config)
 print(f"Finished! Saved to {epub_file=}")
 ```
 
-## Config File
+## Example Config File
 
-The config file is a Yaml file, currently this is only used for the scrape function.
-
-Example Config:
 ``` yaml
 title: Book Title
 sites:
-  - https://site/ddd
-  - https://site/123
-chrome_driver: "chromedriver.exe"
+  - https://website.com/some-book/Chapter-1
+  - https://website.com/some-book/Chapter-2
+  - https://website.com/some-book/Chapter-3
+  - https://website.com/some-book/Chapter-4  
+chrome_driver: "C:/Users/user/OneDrive/Desktop/chromedriver_win32/chromedriver.exe"
 content_div_class: reading-content
+num_threads: 8
+ignore_lines:
+  - Advertisement
 ```
 
-The scrape function header:
-``` python
-def scrape(sites: list, chrome_driver: str, title: str = "Book", content_div_class: str) -> str:
-    """  Scrapes data
-    config keywords:
-        sites (list) - list of sites to scrape
-        chrome_driver (str) - list of sites to scrape
-        title (str) - title to save files as
-        content_div_class (str) - the main div class to save data for
-    """
-```
+Note: The tool limits itself to 16 workers maximum. This will be dependant on your own CPU power.
 
 ## Future Works
 - Better support for specifying bulk number of sites, using regex?
 - Add support to also find other html tags, not just div
-- Multithreading support to improve scraping speed and reduce runtime
 - Options for varying wait time, to target different (more open vs more protected) online resources
 - Option to use basic requests instead of selenium, if selenium isn't needed
 - Save scraped data to different (non-HTML) format
