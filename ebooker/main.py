@@ -3,7 +3,7 @@ import yaml
 from pathlib import Path
 from ebooker.scraper import scrape
 from ebooker.converter import convert_to_epub
-from ebooker.packager import BookHTML
+from ebooker.packager import HtmlBook
 
 
 parser = argparse.ArgumentParser(description="Scrape Websites and convert into EBook")
@@ -23,6 +23,5 @@ def parse_cli_config() -> dict:
 
 def main(config: dict) -> str:
     scraped_data = scrape(config['sites'], config['chrome_driver'], config['content_div_class'], config['num_threads'])
-    doc = BookHTML(title=config['title'], data=scraped_data, ignore_lines=config['ignore_lines'])
-    html_doc_file = doc.save_to_file()
-    return convert_to_epub(html_doc_file)
+    doc = HtmlBook(title=config['title'], data=scraped_data, ignore_lines=config['ignore_lines'])
+    return convert_to_epub(doc.path)
