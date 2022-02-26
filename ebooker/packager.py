@@ -1,17 +1,32 @@
+from enum import Enum
 from secrets import token_hex
 
 
-class BookHTML:
-    def __init__(self, title: str, data: dict = {}, ignore_lines: list = []):
-        self.__data = ""
+class Format(Enum):
+    HTML = "html"
+
+
+class HtmlSection(Enum):
+    TITLE = "h1"
+    HEADING = "h2"
+    TEXT = "p"
+
+
+class Book:
+    def __init__(self, title: str, data: dict, format: Format, ignore_lines: list = []):
         self._title = title
+        self._data = data
+        self._path = f"{title}.{token_hex(8)}.{format.value}"
+        self._format = format
         self._ignore_list = [
             line.lower()
             for line in ignore_lines
         ]
-        self.add_title(self._title)
-        if data:
-            self.add_book(data)
+        self.package_into_book()
+
+    @property
+    def path(self) -> str:
+        return self._path
 
     def _in_ignore_list(self, line):
         return any([
@@ -19,65 +34,58 @@ class BookHTML:
             for ignore_line in self._ignore_list
         ])
 
-    def add_book(self, book_map: dict, ignore_lines: list = []):
-        """ Adds a 'book' as a dictionary of chapters.
-            Dictionary is assumed to be ordered.
-        """
-        self._ignore_list += [
-            line.lower()
-            for line in ignore_lines
-        ]
+    def _write_to_html(self):
         chapter_number = 1
-        for chapter_url, chapter in book_map.items():
-            # Some chapters have repeated html text
-            # This adds some trackers to skip repeated chapters
-            # and only adds it once to the book
-            chapter_header = None
-            reached_end = False
+        with open(self._path, 'w') as output_file:
 
-            for paragraphs in chapter:
-                for line in paragraphs.split('\n'):  # Each paragraph is read '\n' separated
-                    if self._in_ignore_list(line):
-                        continue
+            def write(text, section: HtmlSection):
+                try:
+                    output_file.write(f'<{section.value}>{text}</{section.value}>')
+                except Exception as ex:
+                    print(f"Failed to write - {text}\n{ex}")
 
-                    if chapter_header is None:  # First line of a chapter is always taken as the heading
-                        if line.lower().startswith('chapter'):
-                            chapter_header = line
-                            self.add_header(line)
+            write(self._title, HtmlSection.TITLE)
+
+            for chapter in self._data.values():
+                # Some chapters have repeated html text
+                # This adds some trackers to skip repeated chapters
+                # and only adds it once to the book
+                chapter_header = None
+                reached_end = False
+
+                for paragraphs in chapter:
+                    for line in paragraphs.split('\n'):  # Each paragraph is read '\n' separated
+                        if self._in_ignore_list(line) or reached_end:
                             continue
-                        else:
-                            chapter_header = f"Chapter {chapter_number}"
-                            self.add_header(chapter_header)
 
-                    if chapter_header == line:  # If the header ever repeats we know we have reached the end of the chapter
-                        reached_end = True
+                        if chapter_header is None:  # First line of a chapter is always taken as the heading
+                            chapter_header = line if line.lower().startswith('chapter') else f"Chapter {chapter_number}"
+                            write(chapter_header, HtmlSection.HEADING)
+                            if line.lower().startswith('chapter'):
+                                continue
 
-                    if reached_end:  # And can skip any line that comes after
-                        continue
+                        if chapter_header == line:  # If the header ever repeats we know we have reached the end of the chapter
+                            reached_end = True
+                            continue
 
-                    self.add_line(line)
+                        write(line, HtmlSection.TEXT)
 
-            chapter_number += 1
+                chapter_number += 1
 
-    def prepend(self, text):
-        self.__data = f'{text}\n{self.__data}'
+    def package_into_book(self):
+        packager_map = {
+            Format.HTML: self._write_to_html
+        }
+        print(f"Packaging Scraped Data into {self._format.name} Book")
+        packager_map[self._format]()
+        print("Packaging Finished.")
 
-    def add_title(self, title):
-        self.prepend(f"<h1>{title}<h1>")
 
-    def add_header(self, header: str):
-        self.__data += f"<h2>{header}</h2>\n"
-
-    def add_line(self, line: str):
-        self.__data += f"<p>{line}</p>\n"
-
-    def data(self) -> str:
-        return self.__data
-
-    def save_to_file(self, file_path: str = "") -> str:
-        print("Saving HTML to File...")
-        if not file_path:
-            file_path = f"{self._title}.{token_hex(4)}.html"
-        with open(file_path, "w") as fd:
-            fd.write(self.__data)
-        return file_path
+class HtmlBook(Book):
+    def __init__(self, title: str, data: dict, ignore_lines: list = []):
+        super().__init__(
+            title=title,
+            data=data,
+            format=Format.HTML,
+            ignore_lines=ignore_lines
+        )

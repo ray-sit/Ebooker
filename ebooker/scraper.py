@@ -5,8 +5,9 @@ MAX_THREADS = 16
 # Initialise options to run in headless mode - this saves alot of CPU and GPU
 OPTIONS = webdriver.ChromeOptions()
 OPTIONS.add_argument("--window-size=1920,1080")
-OPTIONS.add_argument("--headless")
+OPTIONS.add_argument("--headless")  # do not bring up thick app
 OPTIONS.add_argument("--disable-gpu")
+OPTIONS.add_argument("--log-level=3")  # quiet
 OPTIONS.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36")
 
 
