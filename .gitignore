@@ -1,0 +1,6 @@
+*.csv
+*.epub
+*.html
+__pycache__
+test
+custom_use.py
